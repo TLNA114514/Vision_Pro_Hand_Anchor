@@ -1,160 +1,154 @@
-# Vision Pro WebXR Hand Stream
+# Vision Pro WebXR Hand Anchor
 
-## What this is
+**Language / 语言**: [中文](#中文说明) | [English](#english)
 
-A minimal WebXR hand-joint streaming prototype for Apple Vision Pro Safari. It serves a local HTTPS page, starts an immersive WebXR session, reads rough hand joint poses, streams them over WebSocket, and logs the messages as JSONL on a desktop or laptop.
+---
 
-This is intentionally small: plain JavaScript, Python, and one Python dependency for the WebSocket server.
+## 中文说明
 
-## What it captures
+[English](#english)
 
-- WebXR hand joint positions, orientations, and radius values when Safari exposes `inputSource.hand`.
-- Viewer/head pose position, orientation, and transform matrix when `frame.getViewerPose()` is available.
-- One JSON message per XR frame.
-- Left and right hand data when available.
-- Client timing, XR predicted display time, frame index, user agent metadata, and reference-space name.
+### 这是什么
 
-## What it does not capture
+这是一个用于 Apple Vision Pro Safari 的最小 WebXR 手部关节点采集原型。它通过本地 HTTPS 页面启动 WebXR immersive session，读取 Vision Pro 暴露的手部关节点与头显/viewer pose，通过 WebSocket 发送到电脑端 Python logger，并保存成 JSONL。
 
-- It does not provide a full visualization engine.
-- It does not assume WebXR joints are ground truth.
-- It does not make raw coordinates comparable with MediaPipe without alignment.
-- It does not require a Mac, Xcode, React, Three.js, or a frontend build step.
+项目重点是数据采集、调试和后续对比，不是完整 XR 应用。
 
-## Requirements
+### 数据流
+
+```text
+Apple Vision Pro Safari
+  -> HTTPS WebXR 页面
+  -> 每帧读取 hand joints + viewer/head pose
+  -> WebSocket JSON
+  -> Python logger
+  -> data/webxr_hand_*.jsonl
+  -> 离线/实时 3D 可视化
+```
+
+### 采集内容
+
+- WebXR 手部关节点位置、朝向和 radius
+- 左手/右手 handedness
+- 头显/viewer 的 position、orientation 和 transform matrix
+- 每帧时间戳、frame index、reference space、FPS 估计
+- WebXR session 诊断事件
+
+### 不做什么
+
+- 不把 WebXR joints 当作绝对真值
+- 不假设 WebXR 原始 XYZ 可以直接和 MediaPipe 比
+- 不依赖 React、Three.js、Xcode 或 macOS
+- 不提交本地证书、采集 JSONL 和生成图片
+
+### 环境要求
 
 - Python 3.10+
-- OpenSSL for generating a local certificate
-- Apple Vision Pro with Safari
-- Desktop/laptop and Vision Pro on the same Wi-Fi
-- Python package: `websockets`
-- Optional plotting package: `matplotlib`
+- OpenSSL
+- Apple Vision Pro + Safari
+- Vision Pro 和电脑在同一 Wi-Fi
+- Python 包：`websockets`
+- 可视化可选包：`matplotlib`
 
-## Setup
+### 安装
+
+如果使用当前项目里已经创建过的 conda 环境：
+
+```bash
+source /home/luojiangrui/miniconda3/etc/profile.d/conda.sh
+conda activate vphand
+```
+
+或者自己创建环境：
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install websockets
+pip install websockets matplotlib
 ```
 
-For offline trajectory plots:
-
-```bash
-pip install matplotlib
-```
-
-Find your desktop/laptop LAN IP, for example `192.168.1.23`, then create a local certificate:
+生成本地证书，传入电脑的局域网 IP：
 
 ```bash
 bash scripts/make_self_signed_cert.sh 192.168.1.23
 ```
 
-## Start WebSocket logger
+### 启动服务
+
+启动 WebSocket logger：
 
 ```bash
 python3 server/ws_logger.py
 ```
 
-The logger listens on:
+默认监听：
 
 ```text
 wss://0.0.0.0:8765
 ```
 
-If `certs/localhost.pem` and `certs/localhost-key.pem` are missing, it falls back to `ws://`. To force plain WebSocket for local desktop testing:
-
-```bash
-python3 server/ws_logger.py --no-tls
-```
-
-It writes files like:
-
-```text
-data/webxr_hand_YYYYMMDD_HHMMSS.jsonl
-```
-
-While frames are arriving, the logger prints a live status line about once per second with server receive FPS, client-estimated FPS, joint count, input-source count, and active XR mode.
-
-## Start HTTPS web server
-
-Preferred:
+启动 HTTPS 静态页面：
 
 ```bash
 python3 server/https_static_server.py
 ```
 
-It serves:
+默认页面地址：
 
 ```text
-https://0.0.0.0:8443
+https://<电脑局域网IP>:8443
 ```
 
-You can also run a plain HTTP test server for desktop debugging only, but WebXR hand tracking requires HTTPS:
+### 在 Vision Pro 上运行
+
+1. 确认 Vision Pro 和电脑在同一 Wi-Fi。
+2. 在电脑端启动 `server/ws_logger.py`。
+3. 在电脑端启动 `server/https_static_server.py`。
+4. 在 Vision Pro Safari 打开：
+
+   ```text
+   https://<电脑局域网IP>:8443
+   ```
+
+5. 接受本地证书警告。
+6. WebSocket URL 填：
+
+   ```text
+   wss://<电脑局域网IP>:8765
+   ```
+
+7. 点击 `Connect WebSocket`。
+8. 选择 XR mode。当前 Vision Pro Safari 可能只支持 `immersive-vr`，不一定支持 `immersive-ar`。
+9. 点击 `Start WebXR Hand Tracking`。
+10. 移动双手和头显，检查终端 FPS 与 `data/` 下的 JSONL。
+
+### 坐标系
+
+WebXR 原始坐标通常是 **Y-up**：
+
+```text
+WebXR x = 左右
+WebXR y = 高度/向上
+WebXR z = 前后/深度
+```
+
+为了更符合常见地面坐标理解，绘图脚本默认显示为：
+
+```text
+显示 X = WebXR x
+显示 Y = WebXR z
+显示 Z = WebXR y，高度
+```
+
+如果想看原始 WebXR 坐标，加：
 
 ```bash
-python3 -m http.server 8443 --directory web
+--display-coords webxr
 ```
 
-## Run on Apple Vision Pro
+### 数据格式
 
-1. Put the desktop/laptop and Vision Pro on the same Wi-Fi.
-2. Find the desktop/laptop LAN IP, for example `192.168.1.23`.
-3. Start the Python WebSocket logger:
-   `python3 server/ws_logger.py`
-4. Start the HTTPS static server:
-   `python3 server/https_static_server.py`
-5. On Vision Pro, open Safari.
-6. Visit:
-   `https://192.168.1.23:8443`
-7. Accept the local certificate warning if Safari allows it.
-8. Click Connect WebSocket.
-9. Choose `AR: align dots with real hands` if you want joint dots overlaid on the real hand view.
-10. Click Start WebXR Hand Tracking.
-11. Grant permissions if prompted.
-12. Move both hands in view.
-13. Check the desktop terminal and `data/` folder for JSONL output.
-
-The WebSocket URL defaults to:
-
-```text
-wss://<current-host>:8765
-```
-
-For quick LAN testing with `python3 server/ws_logger.py --no-tls`, you can edit it to:
-
-```text
-ws://<desktop-ip>:8765
-```
-
-Note: some browsers block insecure WebSocket connections from HTTPS pages. If `ws://` fails from an HTTPS page, use a trusted local TLS setup or tunnel for the WebSocket server.
-
-## Troubleshooting
-
-If the page says WebXR is unavailable:
-
-- update visionOS if possible
-- check Safari WebXR feature flags
-- restart Safari
-- make sure the page is loaded over HTTPS
-- try immersive-vr before immersive-ar
-
-Other notes:
-
-- WebXR APIs require an HTTPS secure context.
-- Vision Pro Safari behavior differs by visionOS version.
-- WebXR hand tracking may be unavailable until an immersive session starts.
-- AR mode is the best choice for visually checking whether rendered joint dots line up with your real hands.
-- `inputSource.hand` may be undefined if hand tracking permission is missing or not granted.
-- `getJointPose()` can return null for occluded or unavailable joints.
-- `handedness` may be `"left"`, `"right"`, or `"none"` depending on implementation.
-- The coordinate frame is WebXR reference-space dependent.
-- Do not compare raw XYZ directly with MediaPipe.
-- For MediaPipe comparison, first align by wrist and normalize by palm scale or wrist-to-middle-MCP length.
-
-## Data format
-
-Each JSONL line contains server timing plus the original browser payload:
+每行 JSONL 是一个 server record：
 
 ```json
 {
@@ -165,6 +159,7 @@ Each JSONL line contains server timing plus the original browser payload:
     "client_time_ms": 12345.678,
     "xr_predicted_display_time_ms": 12345.678,
     "frame_index": 42,
+    "session_mode": "immersive-vr",
     "reference_space": "local-floor",
     "viewer_pose": {
       "valid": true,
@@ -190,91 +185,371 @@ Each JSONL line contains server timing plus the original browser payload:
 }
 ```
 
-Invalid or unavailable joint poses are omitted in this first prototype.
+### 轨迹绘图
 
-`viewer_pose` is the WebXR viewer/head pose in the same reference space as the hand joints. In `local-floor`, values are approximately meters relative to the session's local floor-space origin. Treat this as a browser-defined tracking space, not a global room coordinate system.
-
-## Plot trajectories
-
-After collecting a log with hand frames, create a 3D plot:
+静态 3D 轨迹图：
 
 ```bash
 python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl -o data/trajectory.png
 ```
 
-Plot specific joints:
+只画 viewer/head：
 
 ```bash
 python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
-  --joint wrist \
-  --joint index-finger-tip \
-  --joint thumb-tip \
-  -o data/fingertips.png
+  --viewer-only \
+  -o data/viewer_trajectory.png
 ```
 
-Plot every joint found in the file:
-
-```bash
-python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl --all-joints -o data/all_joints.png
-```
-
-The black line is the viewer/head trajectory. Green is viewer start, red is viewer end.
-Plots default to an everyday coordinate display: `X = WebXR x`, `Y = WebXR z`, and `Z = WebXR y height`. Use `--display-coords webxr` to show raw WebXR axes.
-
-Create a timestamp animation as a GIF:
+生成按时间移动的 GIF：
 
 ```bash
 python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
   --animate \
-  --viewer-only \
+  --joint wrist \
+  --joint index-finger-tip \
+  --joint thumb-tip \
   --fps 20 \
   --trail-frames 180 \
-  -o data/viewer_motion.gif
-```
-
-Animate selected hand joints plus the viewer/head trajectory:
-
-```bash
-python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
-  --animate \
-  --joint wrist \
-  --joint index-finger-tip \
-  --joint thumb-tip \
-  --animation-max-frames 400 \
   -o data/hand_and_viewer_motion.gif
 ```
 
-The animation title shows the source `frame_index` and elapsed client timestamp. By default long logs are downsampled to about 400 rendered GIF frames; use `--stride` or `--animation-max-frames` to control that.
+右侧坐标面板默认开启；关闭：
 
-Animations show a coordinate panel on the right by default. In everyday mode it lists current `(X, Y, Z)` as `(WebXR x, WebXR z, WebXR y-height)`. Disable it with `--no-coordinate-panel`.
+```bash
+--no-coordinate-panel
+```
 
-## Live skeleton viewer
+### 实时/回放骨架 Viewer
 
-Open a free-rotate 3D desktop viewer for the latest log while recording:
+实时查看最新日志：
 
 ```bash
 python3 scripts/view_webxr_skeleton.py --latest --live
 ```
 
-Or follow a specific file:
+实时查看指定文件：
 
 ```bash
 python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl --live
 ```
 
-The viewer draws:
+离线回放：
 
-- viewer/head position as a black point
-- viewer/head orientation as a small frustum/pyramid, with a red forward ray
-- hand joints as colored points
-- hand skeleton bones as colored lines
-- a coordinate panel for current head and key hand joints
+```bash
+python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl --stride 3
+```
 
-Use the mouse in the Matplotlib 3D window to rotate, pan, and zoom the view.
-Press the spacebar to pause/resume live or playback updates.
-The skeleton viewer also defaults to everyday coordinates: `X = WebXR x`, `Y = WebXR z`, `Z = WebXR y height`. Add `--display-coords webxr` to inspect raw WebXR axes.
+保存回放为 GIF：
 
-Playback a saved file interactively:
+```bash
+python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
+  --stride 5 \
+  --max-frames 300 \
+  --save-gif data/skeleton_playback.gif
+```
+
+Viewer 显示：
+
+- 头显/viewer 位置
+- 头显朝向小金字塔/视锥
+- 红色 forward ray
+- 左右手关节点
+- 手部骨架连线
+- 右侧实时坐标面板
+
+操作：
+
+- 鼠标旋转、缩放、平移 3D 视角
+- 空格键暂停/继续 live 或 playback
+
+常用参数：
+
+```bash
+--fixed-range 2.0
+--fixed-height-center 1.2
+--viewer-size 0.18
+--joint-size 24
+--interval-ms 50
+--display-coords webxr
+```
+
+### 常见问题
+
+如果页面显示 WebXR 不可用：
+
+- 确认页面是 HTTPS
+- 检查 Safari WebXR feature flags
+- 更新 visionOS
+- 重启 Safari
+- 先尝试 `immersive-vr`
+
+如果 `immersive-ar` 不可用：
+
+- 这通常是当前 visionOS/Safari WebXR 暴露能力限制
+- Vision Pro 硬件支持 passthrough/AR，但 Safari WebXR 不一定暴露 `immersive-ar`
+- 真实手上叠加关节点需要浏览器支持 `immersive-ar`；否则只能在 `immersive-vr` 或桌面 viewer 中调试
+
+### MediaPipe 对比建议
+
+WebXR hand input 常见 25 个 joints，MediaPipe Hands 常见 21 个 landmarks。不要直接比较原始 XYZ。
+
+建议先比较：
+
+- wrist
+- thumb-tip
+- index-finger-tip
+- middle-finger-tip
+- ring-finger-tip
+- pinky/little-finger-tip
+- MCP-like joints
+
+建议指标：
+
+- wrist-aligned normalized MPJPE
+- thumb-tip 到 index-finger-tip 的 pinch distance
+- fingertip distance curves over time
+
+[Back to top / 返回顶部](#vision-pro-webxr-hand-anchor) | [English](#english)
+
+---
+
+## English
+
+[中文](#中文说明)
+
+### What This Is
+
+This is a minimal WebXR hand-anchor and trajectory capture prototype for Apple Vision Pro Safari. It serves a local HTTPS page, starts an immersive WebXR session, reads Vision Pro hand joints and viewer/head pose, streams each frame to a Python WebSocket logger, and saves the data as JSONL.
+
+The goal is data collection, debugging, and later comparison, not a full XR application.
+
+### Data Flow
+
+```text
+Apple Vision Pro Safari
+  -> HTTPS WebXR page
+  -> per-frame hand joints + viewer/head pose
+  -> WebSocket JSON
+  -> Python logger
+  -> data/webxr_hand_*.jsonl
+  -> offline/live 3D visualization
+```
+
+### Captured Data
+
+- WebXR hand joint position, orientation, and radius
+- left/right handedness
+- viewer/head position, orientation, and transform matrix
+- frame timing, frame index, reference space, and FPS estimate
+- WebXR session diagnostic events
+
+### Not Included
+
+- No full visualization engine
+- No assumption that WebXR joints are ground truth
+- No assumption that raw WebXR XYZ directly matches MediaPipe
+- No React, Three.js, Xcode, or macOS requirement
+- No committed local certificates, JSONL logs, or generated images
+
+### Requirements
+
+- Python 3.10+
+- OpenSSL
+- Apple Vision Pro with Safari
+- Vision Pro and desktop/laptop on the same Wi-Fi
+- Python package: `websockets`
+- Optional visualization package: `matplotlib`
+
+### Setup
+
+Use the existing conda environment if available:
+
+```bash
+source /home/luojiangrui/miniconda3/etc/profile.d/conda.sh
+conda activate vphand
+```
+
+Or create your own environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install websockets matplotlib
+```
+
+Generate a local certificate with your desktop/laptop LAN IP:
+
+```bash
+bash scripts/make_self_signed_cert.sh 192.168.1.23
+```
+
+### Start Services
+
+Start the WebSocket logger:
+
+```bash
+python3 server/ws_logger.py
+```
+
+It listens on:
+
+```text
+wss://0.0.0.0:8765
+```
+
+Start the HTTPS static server:
+
+```bash
+python3 server/https_static_server.py
+```
+
+Open on Vision Pro:
+
+```text
+https://<desktop-lan-ip>:8443
+```
+
+### Run on Apple Vision Pro
+
+1. Put Vision Pro and desktop/laptop on the same Wi-Fi.
+2. Start `server/ws_logger.py`.
+3. Start `server/https_static_server.py`.
+4. Open Safari on Vision Pro.
+5. Visit:
+
+   ```text
+   https://<desktop-lan-ip>:8443
+   ```
+
+6. Accept the local certificate warning if Safari allows it.
+7. Set WebSocket URL to:
+
+   ```text
+   wss://<desktop-lan-ip>:8765
+   ```
+
+8. Click `Connect WebSocket`.
+9. Choose XR mode. Current Vision Pro Safari builds may support `immersive-vr` but not `immersive-ar`.
+10. Click `Start WebXR Hand Tracking`.
+11. Move both hands and the headset.
+12. Check terminal FPS and JSONL files under `data/`.
+
+### Coordinate System
+
+Raw WebXR coordinates are typically **Y-up**:
+
+```text
+WebXR x = left/right
+WebXR y = height/up
+WebXR z = forward/back/depth
+```
+
+For easier everyday reading, visualization scripts default to:
+
+```text
+display X = WebXR x
+display Y = WebXR z
+display Z = WebXR y height
+```
+
+To inspect raw WebXR axes:
+
+```bash
+--display-coords webxr
+```
+
+### Data Format
+
+Each JSONL line contains server timing plus the original browser payload:
+
+```json
+{
+  "server_receive_time_ns": 1234567890123456789,
+  "payload": {
+    "type": "webxr_hand_frame",
+    "source": "visionpro_safari_webxr",
+    "client_time_ms": 12345.678,
+    "xr_predicted_display_time_ms": 12345.678,
+    "frame_index": 42,
+    "session_mode": "immersive-vr",
+    "reference_space": "local-floor",
+    "viewer_pose": {
+      "valid": true,
+      "position": [0.0, 1.6, 0.0],
+      "orientation": [0.0, 0.0, 0.0, 1.0],
+      "matrix": [1.0, 0.0, 0.0, 0.0]
+    },
+    "hands": [
+      {
+        "handedness": "left",
+        "joints": [
+          {
+            "name": "wrist",
+            "valid": true,
+            "position": [0.1, 1.2, -0.3],
+            "orientation": [0.0, 0.0, 0.0, 1.0],
+            "radius": 0.012
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Invalid or unavailable joint poses are omitted.
+
+### Plot Trajectories
+
+Static 3D plot:
+
+```bash
+python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl -o data/trajectory.png
+```
+
+Viewer/head only:
+
+```bash
+python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
+  --viewer-only \
+  -o data/viewer_trajectory.png
+```
+
+Timestamp animation as GIF:
+
+```bash
+python3 scripts/plot_webxr_jsonl.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
+  --animate \
+  --joint wrist \
+  --joint index-finger-tip \
+  --joint thumb-tip \
+  --fps 20 \
+  --trail-frames 180 \
+  -o data/hand_and_viewer_motion.gif
+```
+
+The coordinate panel is enabled by default. Disable it with:
+
+```bash
+--no-coordinate-panel
+```
+
+### Live Skeleton Viewer
+
+Live viewer for the latest log:
+
+```bash
+python3 scripts/view_webxr_skeleton.py --latest --live
+```
+
+Live viewer for a specific file:
+
+```bash
+python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl --live
+```
+
+Offline playback:
 
 ```bash
 python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl --stride 3
@@ -289,11 +564,52 @@ python3 scripts/view_webxr_skeleton.py data/webxr_hand_YYYYMMDD_HHMMSS.jsonl \
   --save-gif data/skeleton_playback.gif
 ```
 
-## Next steps for MediaPipe comparison
+The viewer draws:
 
-MediaPipe and WebXR hands expose different landmark sets and coordinate frames. WebXR hand input commonly exposes 25 joints, while MediaPipe Hands commonly exposes 21 landmarks, so use a joint mapping table before comparing.
+- viewer/head position
+- viewer/head orientation as a frustum/pyramid
+- red forward ray
+- left/right hand joints
+- hand skeleton bones
+- live coordinate panel
 
-Compare shared stable joints first:
+Controls:
+
+- mouse to rotate, zoom, and pan
+- spacebar to pause/resume live or playback updates
+
+Useful options:
+
+```bash
+--fixed-range 2.0
+--fixed-height-center 1.2
+--viewer-size 0.18
+--joint-size 24
+--interval-ms 50
+--display-coords webxr
+```
+
+### Troubleshooting
+
+If WebXR is unavailable:
+
+- make sure the page is loaded over HTTPS
+- check Safari WebXR feature flags
+- update visionOS
+- restart Safari
+- try `immersive-vr` first
+
+If `immersive-ar` is unavailable:
+
+- it is likely a current visionOS/Safari WebXR capability limit
+- Vision Pro hardware supports passthrough/AR, but Safari WebXR may not expose `immersive-ar`
+- real-hand overlay needs browser `immersive-ar`; otherwise use `immersive-vr` or the desktop viewer
+
+### MediaPipe Comparison Notes
+
+WebXR hand input commonly exposes 25 joints, while MediaPipe Hands commonly exposes 21 landmarks. Do not compare raw XYZ directly.
+
+Start with shared stable joints:
 
 - wrist
 - thumb-tip
@@ -301,12 +617,12 @@ Compare shared stable joints first:
 - middle-finger-tip
 - ring-finger-tip
 - pinky/little-finger-tip
-- index/middle/ring/little MCP-like joints
+- MCP-like joints
 
-Good first metrics:
+Useful metrics:
 
 - wrist-aligned normalized MPJPE
-- pinch distance from thumb-tip to index-finger-tip
+- thumb-tip to index-finger-tip pinch distance
 - fingertip distance curves over time
 
-For a first pass, align each frame by wrist and normalize by palm scale or wrist-to-middle-MCP length. Raw WebXR XYZ and MediaPipe XYZ should not be compared directly.
+[Back to top](#vision-pro-webxr-hand-anchor) | [中文](#中文说明)
