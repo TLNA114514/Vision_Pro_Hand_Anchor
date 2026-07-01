@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vision Pro WebXR Hand Stream</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">WebXR data collection prototype</p>
+        <h1>Vision Pro Hand Joint Stream</h1>
+      </header>
+
+      <section class="panel status-grid" aria-label="Status">
+        <div>
+          <span class="label">WebXR</span>
+          <strong id="xrStatus">Checking...</strong>
+        </div>
+        <div>
+          <span class="label">WebSocket</span>
+          <strong id="wsStatus">Disconnected</strong>
+        </div>
+        <div>
+          <span class="label">Session</span>
+          <strong id="sessionStatus">Stopped</strong>
+        </div>
+      </section>
+
+      <section class="panel controls" aria-label="Controls">
+        <label for="wsUrl">WebSocket URL</label>
+        <div class="row">
+          <input id="wsUrl" type="text" autocomplete="off" spellcheck="false">
+          <button id="connectWsButton" type="button">Connect WebSocket</button>
+        </div>
+        <label for="xrMode">XR Mode</label>
+        <div class="row compact-row">
+          <select id="xrMode">
+            <option value="immersive-ar" selected>AR: align dots with real hands</option>
+            <option value="immersive-vr">VR: opaque immersive session</option>
+            <option value="auto">Auto: try AR, then VR</option>
+          </select>
+        </div>
+        <div class="button-row">
+          <button id="startXrButton" type="button">Start WebXR Hand Tracking</button>
+          <button id="stopButton" type="button">Stop</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Live debug">
+        <h2>Live Debug</h2>
+        <dl class="debug-grid">
+          <div>
+            <dt>Frame count</dt>
+            <dd id="frameCount">0</dd>
+          </div>
+          <div>
+            <dt>Joints last frame</dt>
+            <dd id="jointCount">0</dd>
+          </div>
+          <div>
+            <dt>Left hand</dt>
+            <dd id="leftPresent">false</dd>
+          </div>
+          <div>
+            <dt>Right hand</dt>
+            <dd id="rightPresent">false</dd>
+          </div>
+          <div>
+            <dt>Dropped frames</dt>
+            <dd id="droppedFrames">0</dd>
+          </div>
+          <div>
+            <dt>FPS estimate</dt>
+            <dd id="fpsEstimate">0.0</dd>
+          </div>
+        </dl>
+        <div class="error-box">
+          <span class="label">Last error</span>
+          <pre id="lastError">None</pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="main.js?v=20260630-ar-mode-fps"></script>
+  </body>
+</html>
